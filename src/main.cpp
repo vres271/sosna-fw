@@ -122,16 +122,17 @@ void loop() {
         for (int i = 0; i < NUM_LEDS; i++) {
             Serial.println();
             if (sizeof(vectors[i].points) > 0) {
+                GPoint point = vectors[i].points[counter];
                 leds[i] = CRGB(
-                    vectors[i].points[counter].color.r, 
-                    vectors[i].points[counter].color.g, 
-                    vectors[i].points[counter].color.b
+                    point.color.r, 
+                    point.color.g, 
+                    point.color.b
                 );
                 Serial.print(i);
                 Serial.print(" - ");
-                Serial.print(vectors[i].points[counter].color.r); Serial.print(", ");
-                Serial.print(vectors[i].points[counter].color.g); Serial.print(", ");
-                Serial.print(vectors[i].points[counter].color.b); Serial.print(", ");
+                Serial.print(point.color.r); Serial.print(", ");
+                Serial.print(point.color.g); Serial.print(", ");
+                Serial.print(point.color.b); Serial.print(", ");
                 Serial.print(", ");
             }
         }
