@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "by-gdb",
+            "request": "launch",
+            "name": "Launch(gdb)",
+            "program": "tests/.build/bin/${fileBasenameNoExtension}",
+            "cwd": "${workspaceRoot}"
+        },
+    ]
+}
