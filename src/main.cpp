@@ -122,6 +122,17 @@ void setup() {
         Serial.println(message);
     });
 
+    server.on("/clear", HTTP_POST, [](AsyncWebServerRequest *request){
+        for(int i = 0; i < NUM_LEDS; i++) {
+            vectors[i] = (GVector) {(GPoint) {}, 0};
+            leds[i] = CRGB(0, 0, 0);            
+        }
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", "{\"result\": \"ok\"}");
+        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Origin","*");
+        request->send(response);
+    });
+
     server.on("/set", HTTP_POST, [](AsyncWebServerRequest *request){
         String message;
         // Serial.println("POST");
