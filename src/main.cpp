@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <utils.cpp>
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -39,22 +40,37 @@ struct GColor {
   uint8_t b;
 };
 
+
 struct GPoint {
   long unsigned t;
+  byte timeFn;
+  byte orderFn;
   GColor color;
 };
 
 struct GVector {
   GPoint points[16];
+  long unsigned t;
+};
+
+struct GPointsTuple {
+  GPoint point;
+  GPoint nextPoint;
+  boolean isLast;
 };
 
 GVector vectors[NUM_LEDS];
+
 
 
 void notFound(AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");
     Serial.println("Not found");
 }
+
+
+
+
 
 void setup() {
     Serial.begin(115200);
@@ -68,7 +84,7 @@ void setup() {
         return;
     }
 
-    Serial.print("");
+    Serial.println();
     Serial.println("IP Address: ");
     Serial.println(WiFi.localIP());
 
@@ -84,31 +100,105 @@ void setup() {
             g = (request->getParam(PARAM_G)->value()).toInt();
             b = (request->getParam(PARAM_B)->value()).toInt();
 
-            vectors[ledN] = (GVector) {{
-                (GPoint) {1, (GColor) {r, g, b}},
-                (GPoint) {3000, (GColor) {255, 0, 0}},
-                (GPoint) {6000, (GColor) {0, 0, 255}},
-            }};
+            vectors[ledN] = (GVector) {
+                {
+                    (GPoint) {0, 1, 1, (GColor) {r, g, b}},
+                    (GPoint) {50, 1, 1, (GColor) {255, 0, 0}},
+                    (GPoint) {100, 1, 1, (GColor) {0, 255, 0}},
+                    (GPoint) {150, 1, 1, (GColor) {0, 0, 255}},
+                    (GPoint) {200, 1, 1, (GColor) {r, g, b}},
+                },
+                0
+            };
             
             message = "{\"led\": \"" + String(ledN) + "\"}";
         } else {
             message = "{\"error\": \"Empty params\"}";
         }
         AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message);
+        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
         response->addHeader("Access-Control-Allow-Origin","*");
         request->send(response);
         Serial.println(message);
     });
 
-    // Send a POST request to <IP>/post with a form field message set to <message>
-    server.on("/post", HTTP_POST, [](AsyncWebServerRequest *request){
+    server.on("/set", HTTP_POST, [](AsyncWebServerRequest *request){
         String message;
-        if (request->hasParam(PARAM_LED, true)) {
-            message = request->getParam(PARAM_LED, true)->value();
-        } else {
-            message = "No message sent";
+        // Serial.println("POST");
+        // int params = request->params();
+        // for(int i=0;i<params;i++){
+        //     AsyncWebParameter* p = request->getParam(i);
+        //     if(p->isFile()){ //p->isPost() is also true
+        //         Serial.printf("FILE[%s]: %s, size: %u\n", p->name().c_str(), p->value().c_str(), p->size());
+        //     } else if(p->isPost()){
+        //         message = String(p->name().c_str()) + " " +  String(p->value().c_str());
+        //         Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+        //     } else {
+        //         Serial.printf("GET[%s]: %s\n", p->name().c_str(), p->value().c_str());
+        //     }
+        // }
+
+        message = message + "{\"result\": [";
+        AsyncWebParameter* p = request->getParam(0);
+        if (p->isPost()) {
+            String payload = String(p->value().c_str());
+            // Serial.println("payload: " + payload);
+            for(int i = 0; i < NUM_LEDS; i++) {
+                String ledStr = split(payload, ';', i);
+                if (ledStr == "") {
+                    break;
+                }
+                if (i > 0) message = message + ",";
+                // Serial.println("ledStr: " + ledStr);
+                int led = split(ledStr, ':', 0).toInt();
+                
+                String pointsStr = split(ledStr, ':', 1);
+                // Serial.println("pointsStr: " + pointsStr);
+                
+                vectors[led] = (GVector) {{}, 0};
+
+                for(int j = 0; j < 16; j++) {
+                    String pointStr = split(pointsStr, '|', j);
+                    if (pointStr == "") {
+                        break;
+                    }
+                    // Serial.println("pointStr: " + pointStr);
+                    uint8_t r = split(pointStr, ',', 0).toInt();
+                    uint8_t g = split(pointStr, ',', 1).toInt();
+                    uint8_t b = split(pointStr, ',', 2).toInt();
+                    long unsigned t = split(pointStr, ',', 3).toInt();
+                    byte timeFn = split(pointStr, ',', 4).toInt();
+                    byte orderFn = split(pointStr, ',', 4).toInt();
+
+                    vectors[led].points[j] = (GPoint) {t, timeFn, orderFn, (GColor) {r, g, b}};
+
+                    // Serial.println(
+                    //     "r: " + String(r) + ", "
+                    //     "g: " + String(g) + ", "
+                    //     "b: " + String(b) + ", "
+                    //     "t: " + String(t) + ", "
+                    //     "timeFn: " + String(timeFn) + ", "
+                    //     "orderFn: "  + String(orderFn)
+                    // );
+                }              
+                message = message + led;
+            }
         }
-        request->send(200, "text/plain", "Hello, POST: " + message);
+        message = message + "]}";
+        
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message);
+        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Origin","*");
+        request->send(response);
+    });
+
+    server.on("/post", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json");
+        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Headers","X-PINGOTHER, Content-Type");
+        response->addHeader("Access-Control-Allow-Origin","*");
+        request->send(response);
+        Serial.println("OPTIONS");
     });
 
     server.onNotFound(notFound);
@@ -117,33 +207,60 @@ void setup() {
 
 }
 
+
+GPointsTuple getCurrentPoint(GVector vector) {
+
+    GPoint firstPoint = vector.points[0];
+    GPoint lastPoint;
+
+    for (int j = 0; j < 16; j++) {
+        if (vector.points[j+1].orderFn == 0) {
+            lastPoint = vector.points[j];
+            break;
+        }
+    }
+    for (int j = 0; j < 16; j++) {
+        if (vector.points[j].t <= vector.t && vector.t < vector.points[j+1].t) {
+            return {vector.points[j], vector.points[j+1], false};
+        }
+        if (vector.points[j].orderFn == 0) {
+            break;
+        }
+    }
+    // Serial.println("lastPoint: " + String(lastPoint.t) + "firstPoint: " + String(firstPoint.t));
+
+    return {lastPoint, firstPoint, vector.t > lastPoint.t};
+
+}
+
 void loop() {
-    if (millis() > lastLedShow + 1000) {
+    long unsigned t = millis();
+    long unsigned dt = t - lastLedShow;
+    if (dt > 30) {
+        // Serial.println("t: " + String(t) + " --------------");
         for (int i = 0; i < NUM_LEDS; i++) {
-            Serial.println();
-            if (sizeof(vectors[i].points) > 0) {
-                GPoint point = vectors[i].points[counter];
+            GVector vector = vectors[i];
+            if (vectors[i].points[0].timeFn > 0) {
+                vectors[i].t = vectors[i].t + dt;
+
+                // Serial.println(" led:" + String(i));
+                GPointsTuple tuple = getCurrentPoint(vector);
+
+                // Serial.print("" + String(vector.t) + " => [" + String(tuple.point.t) + ", " + String(tuple.nextPoint.t) + "]; ");
                 leds[i] = CRGB(
-                    point.color.r, 
-                    point.color.g, 
-                    point.color.b
+                    tuple.point.color.r,
+                    tuple.point.color.g,
+                    tuple.point.color.b
                 );
-                Serial.print(i);
-                Serial.print(" - ");
-                Serial.print(point.color.r); Serial.print(", ");
-                Serial.print(point.color.g); Serial.print(", ");
-                Serial.print(point.color.b); Serial.print(", ");
-                Serial.print(", ");
+                if (tuple.isLast) {
+                    // Serial.print(" reset t;");
+                    vectors[i].t = 0;
+                }
+                // Serial.println();
             }
         }
         FastLED.show();
-        lastLedShow = millis();
-    }
-    if (millis() > lastCounterSwitch + 2000) {
-        counter++; 
-        if (counter > 2) {
-            counter = 0;
-        }
-        lastCounterSwitch = millis();
+        lastLedShow = t;
     }
 }
+

@@ -1,0 +1,20 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "bit": "cpp",
+        "compare": "cpp",
+        "condition_variable": "cpp",
+        "cstddef": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "optional": "cpp",
+        "limits": "cpp",
+        "memory": "cpp",
+        "new": "cpp",
+        "ranges": "cpp",
+        "functional": "cpp",
+        "regex": "cpp",
+        "system_error": "cpp",
+        "typeinfo": "cpp"
+    }
+}
