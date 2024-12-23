@@ -203,11 +203,12 @@ void setup() {
         request->send(response);
     });
 
-    server.on("/post", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+    server.on("/set", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
         AsyncWebServerResponse *response = request->beginResponse(200, "application/json");
         response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
         response->addHeader("Access-Control-Allow-Headers","X-PINGOTHER, Content-Type");
         response->addHeader("Access-Control-Allow-Origin","*");
+        response->addHeader("Access-Control-Allow-Private-Network","true");
         request->send(response);
         Serial.println("OPTIONS");
     });
