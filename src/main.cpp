@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <utils.cpp>
+// #include <files.cpp>
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -9,6 +10,8 @@
 #include <ESPAsyncTCP.h>
 #endif
 #include <ESPAsyncWebServer.h>
+
+#include <FS.h>
 
 AsyncWebServer server(80);
 const char* PARAM_LED = "led";
@@ -87,6 +90,13 @@ void setup() {
     Serial.println();
     Serial.println("IP Address: ");
     Serial.println(WiFi.localIP());
+
+    if (!SPIFFS.begin()) {
+        Serial.println("Failed to mount file system");
+        return;
+    }
+
+    server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
     server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
         String message;
