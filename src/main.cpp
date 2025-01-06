@@ -50,7 +50,7 @@ struct GPoint {
 
 struct GVector {
   GPoint points[16];
-  long unsigned t;
+  long unsigned timeOffset;
 };
 
 struct GPointsTuple {
@@ -91,45 +91,12 @@ void setup() {
 
     server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
-    server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
-        String message;
-        int unsigned ledN;
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
-        if (request->hasParam(PARAM_LED)) {
-            ledN = (request->getParam(PARAM_LED)->value()).toInt();
-            r = (request->getParam(PARAM_R)->value()).toInt();
-            g = (request->getParam(PARAM_G)->value()).toInt();
-            b = (request->getParam(PARAM_B)->value()).toInt();
-
-            vectors[ledN] = (GVector) {
-                {
-                    (GPoint) {0, 1, 1, (GColor) {r, g, b}},
-                    (GPoint) {50, 1, 1, (GColor) {255, 0, 0}},
-                    (GPoint) {100, 1, 1, (GColor) {0, 255, 0}},
-                    (GPoint) {150, 1, 1, (GColor) {0, 0, 255}},
-                    (GPoint) {200, 1, 1, (GColor) {r, g, b}},
-                },
-                0
-            };
-            
-            message = "{\"led\": \"" + String(ledN) + "\"}";
-        } else {
-            message = "{\"error\": \"Empty params\"}";
-        }
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message);
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
-        Serial.println(message);
-    });
 
     server.on("/sosna", HTTP_POST, [](AsyncWebServerRequest *request){
         AsyncWebServerResponse *response = request->beginResponse(
             200,
             "application/json", 
-            "{\"result\": {\"device\": \"sosna\", \"leds\": 200}}"
+            "{\"result\":{\"device\":\"sosna\",\"leds\":200}}"
         );
         response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
         response->addHeader("Access-Control-Allow-Origin","*");
@@ -167,7 +134,7 @@ void setup() {
             vectors[i] = (GVector) {(GPoint) {}, 0};
             leds[i] = CRGB(0, 0, 0);            
         }
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", "{\"result\": \"ok\"}");
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", "{\"result\":\"ok\"}");
         response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
         response->addHeader("Access-Control-Allow-Origin","*");
         request->send(response);
@@ -176,31 +143,28 @@ void setup() {
     server.on("/set", HTTP_POST, [](AsyncWebServerRequest *request){
         mode = 0;
         String message;
-        message = message + "{\"result\": [";
+        message = message + "{\"result\":[";
         AsyncWebParameter* p = request->getParam(0);
         if (p->isPost()) {
             String payload = String(p->value().c_str());
-            // Serial.println("payload: " + payload);
             for(int i = 0; i < NUM_LEDS; i++) {
                 String ledStr = split(payload, ';', i);
                 if (ledStr == "") {
                     break;
                 }
                 if (i > 0) message = message + ",";
-                // Serial.println("ledStr: " + ledStr);
                 int led = split(ledStr, ':', 0).toInt();
+                long unsigned timeOffset = split(ledStr, ':', 1).toInt();
                 
-                String pointsStr = split(ledStr, ':', 1);
-                // Serial.println("pointsStr: " + pointsStr);
+                String pointsStr = split(ledStr, ':', 2);
                 
-                vectors[led] = (GVector) {{}, 0};
+                vectors[led] = (GVector) {{}, timeOffset};
 
                 for(int j = 0; j < 16; j++) {
                     String pointStr = split(pointsStr, '|', j);
                     if (pointStr == "") {
                         break;
                     }
-                    // Serial.println("pointStr: " + pointStr);
                     uint8_t r = split(pointStr, ',', 0).toInt();
                     uint8_t g = split(pointStr, ',', 1).toInt();
                     uint8_t b = split(pointStr, ',', 2).toInt();
@@ -210,14 +174,6 @@ void setup() {
 
                     vectors[led].points[j] = (GPoint) {t, timeFn, orderFn, (GColor) {r, g, b}};
 
-                    // Serial.println(
-                    //     "r: " + String(r) + ", "
-                    //     "g: " + String(g) + ", "
-                    //     "b: " + String(b) + ", "
-                    //     "t: " + String(t) + ", "
-                    //     "timeFn: " + String(timeFn) + ", "
-                    //     "orderFn: "  + String(orderFn)
-                    // );
                 }              
                 message = message + led;
             }
@@ -243,32 +199,6 @@ void setup() {
     server.onNotFound(notFound);
 
     server.begin();
-
-}
-
-
-GPointsTuple getCurrentPoint(GVector vector) {
-
-    GPoint firstPoint = vector.points[0];
-    GPoint lastPoint;
-
-    for (int j = 0; j < 16; j++) {
-        if (vector.points[j+1].orderFn == 0) {
-            lastPoint = vector.points[j];
-            break;
-        }
-    }
-    for (int j = 0; j < 16; j++) {
-        if (vector.points[j].t <= vector.t && vector.t < vector.points[j+1].t) {
-            return {vector.points[j], vector.points[j+1], false};
-        }
-        if (vector.points[j].orderFn == 0) {
-            break;
-        }
-    }
-    // Serial.println("lastPoint: " + String(lastPoint.t) + "firstPoint: " + String(firstPoint.t));
-
-    return {lastPoint, firstPoint, vector.t > lastPoint.t};
 
 }
 
@@ -306,7 +236,7 @@ void sinus1(long unsigned t) {
 void loop() {
     long unsigned t = millis();
     long unsigned dt = t - lastLedShow;
-    if (dt > 30) {
+    if (dt > 10) {
         if (mode == 1) {
             sinus1(t);
         } else if (mode == 2) {
@@ -317,22 +247,34 @@ void loop() {
             for (int i = 0; i < NUM_LEDS; i++) {
                 GVector vector = vectors[i];
                 if (vectors[i].points[0].timeFn > 0) {
-                    vectors[i].t = vectors[i].t + dt;
-
-                    // Serial.println(" led:" + String(i));
-                    GPointsTuple tuple = getCurrentPoint(vector);
-
-                    // Serial.print("" + String(vector.t) + " => [" + String(tuple.point.t) + ", " + String(tuple.nextPoint.t) + "]; ");
-                    leds[i] = CRGB(
-                        tuple.point.color.r,
-                        tuple.point.color.g,
-                        tuple.point.color.b
-                    );
-                    if (tuple.isLast) {
-                        // Serial.print(" reset t;");
-                        vectors[i].t = 0;
+                    GPoint last;
+                    for (int j = 0; j < 16; j++) {
+                        if (vector.points[j].timeFn < 1) {
+                            last = vector.points[j - 1];
+                            break;
+                        }
                     }
-                    // Serial.println();
+                    long unsigned t0 = (last.timeFn > 0 && last.t != 0) ? ((t - vector.timeOffset * i) % last.t) : 0;
+                    
+                    GPoint next;
+                    GPoint prev;
+                    for (int j = 0; j < 16; j++) {
+                        if (vector.points[j].t > t0) {
+                            next = vector.points[j];
+                            prev = vector.points[j - 1];
+                            break;
+                        }
+                    }
+
+                    if (next.timeFn > 0 && prev.timeFn > 0) {
+                      double k = (next.t != prev.t) ? (((double) (t0 - prev.t)) / ((double) (next.t - prev.t))) : 1;
+                      leds[i] = CRGB(
+                          (int) (prev.color.r + (next.color.r - prev.color.r) * k),
+                          (int) (prev.color.g + (next.color.g - prev.color.g) * k),
+                          (int) (prev.color.b + (next.color.b - prev.color.b) * k)
+                      );
+                    }
+
                 }
             }
         }
