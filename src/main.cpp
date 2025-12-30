@@ -19,7 +19,7 @@ const char* PARAM_R = "r";
 const char* PARAM_G = "g";
 const char* PARAM_B = "b";
 
-#define WIFI_SSID "TP-LINK_B97598"
+#define WIFI_SSID "TP-Link_49CB"
 #define WIFI_PASS "sukaher271"
 
 #include <FastLED.h>
