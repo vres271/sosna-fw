@@ -84,12 +84,15 @@ void setup() {
     Serial.println("IP Address: ");
     Serial.println(WiFi.localIP());
 
+
     if (!SPIFFS.begin()) {
         Serial.println("Failed to mount file system");
         return;
     }
 
+
     server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+
 
 
     server.on("/sosna", HTTP_POST, [](AsyncWebServerRequest *request){
@@ -103,17 +106,32 @@ void setup() {
         request->send(response);
     });    
 
+
     server.on("/getmodes", HTTP_POST, [](AsyncWebServerRequest *request){
-        AsyncWebServerResponse *response = request->beginResponse(
-            200,
-            "application/json", 
-            "{\"result\": {\"mode\":" + String(mode) + ",\"modes\":[{\"id\":1,\"name\":\"s1\"},{\"id\":2,\"name\":\"s2\"},{\"id\":3,\"name\":\"s3\"}]}}"
-        );
+        String json = "{\"result\": {\"mode\":" + String(mode) + ",\"modes\":[";
+        json += "{\"id\":1,\"name\":\"s1\"},";
+        json += "{\"id\":2,\"name\":\"s2\"},";
+        json += "{\"id\":3,\"name\":\"s3\"},";
+        json += "{\"id\":4,\"name\":\"s4\"},";
+        json += "{\"id\":5,\"name\":\"s5\"},";
+        json += "{\"id\":6,\"name\":\"s6\"},";
+        json += "{\"id\":7,\"name\":\"s7\"},";
+        json += "{\"id\":8,\"name\":\"s8\"},";
+        json += "{\"id\":9,\"name\":\"s9\"},";
+        json += "{\"id\":10,\"name\":\"s10\"},";
+        json += "{\"id\":11,\"name\":\"s11\"},";
+        json += "{\"id\":12,\"name\":\"s12\"},";
+        json += "{\"id\":13,\"name\":\"s13\"},";
+        json += "{\"id\":14,\"name\":\"s14\"},";
+        json += "{\"id\":15,\"name\":\"s15\"}";
+        json += "]}}";
+
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
         response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
         response->addHeader("Access-Control-Allow-Origin","*");
         request->send(response);
-
     });    
+
 
     server.on("/setmode", HTTP_POST, [](AsyncWebServerRequest *request){
         AsyncWebParameter* p = request->getParam(0);
@@ -128,6 +146,7 @@ void setup() {
         request->send(response);
     });    
 
+
     server.on("/clear", HTTP_POST, [](AsyncWebServerRequest *request){
         mode = 0;
         for(int i = 0; i < NUM_LEDS; i++) {
@@ -139,6 +158,7 @@ void setup() {
         response->addHeader("Access-Control-Allow-Origin","*");
         request->send(response);
     });
+
 
     server.on("/set", HTTP_POST, [](AsyncWebServerRequest *request){
         mode = 0;
@@ -160,6 +180,7 @@ void setup() {
                 
                 vectors[led] = (GVector) {{}, timeOffset};
 
+
                 for(int j = 0; j < 16; j++) {
                     String pointStr = split(pointsStr, '|', j);
                     if (pointStr == "") {
@@ -172,7 +193,9 @@ void setup() {
                     byte timeFn = split(pointStr, ',', 4).toInt();
                     byte orderFn = split(pointStr, ',', 4).toInt();
 
+
                     vectors[led].points[j] = (GPoint) {t, timeFn, orderFn, (GColor) {r, g, b}};
+
 
                 }              
                 message = message + led;
@@ -186,6 +209,7 @@ void setup() {
         request->send(response);
     });
 
+
     server.on("/set", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
         AsyncWebServerResponse *response = request->beginResponse(200, "application/json");
         response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
@@ -196,11 +220,17 @@ void setup() {
         Serial.println("OPTIONS");
     });
 
+
     server.onNotFound(notFound);
+
 
     server.begin();
 
+
 }
+
+
+// ============ ОРИГИНАЛЬНЫЕ 3 РЕЖИМА ============
 
 void sinus3(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
@@ -212,6 +242,7 @@ void sinus3(long unsigned t) {
     }
 }
 
+
 void sinus2(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         leds[i] = CRGB(
@@ -221,6 +252,7 @@ void sinus2(long unsigned t) {
         );
     }
 }
+
 
 void sinus1(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
@@ -233,6 +265,165 @@ void sinus1(long unsigned t) {
     }
 }
 
+
+// ============ НОВЫЕ 12 РЕЖИМОВ ============
+
+// Mode 4: Глубокий фиолет с холодной волной
+void purpleWave(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double wave = 0.5 + 0.5 * sin(0.002 * t + 0.08 * i);
+        leds[i] = CRGB(
+            (int) (80 + 120 * sin(0.0025 * t + 0.7 * i)),
+            (int) (30 + 40 * sin(0.002 * t + 0.75 * i + PI / 3)),
+            (int) (200 + 55 * wave * sin(0.003 * t + 0.85 * i))
+        );
+    }
+}
+
+
+// Mode 5: Бирюза — быстрый циан с зеленоватым оттенком
+void cyanRush(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double phase = 0.006 * t + 0.15 * i;
+        leds[i] = CRGB(
+            (int) (40 + 60 * sin(phase)),
+            (int) (180 + 75 * sin(phase + PI / 3)),
+            (int) (200 + 55 * sin(phase + PI / 6))
+        );
+    }
+}
+
+
+// Mode 6: Теплый закат — оранжево-красный переход
+void sunsetGlow(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double breathing = 0.5 + 0.5 * sin(0.0015 * t + 0.03 * i);
+        leds[i] = CRGB(
+            (int) (200 + 55 * breathing * sin(0.002 * t + 0.6 * i)),
+            (int) (100 + 80 * breathing * sin(0.0018 * t + 0.65 * i)),
+            (int) (30 + 20 * sin(0.0017 * t + 0.7 * i))
+        );
+    }
+}
+
+
+// Mode 7: Мягкий розовый сон
+void softPink(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double slowWave = 0.4 + 0.6 * sin(0.001 * t + 0.04 * i);
+        leds[i] = CRGB(
+            (int) (200 + 55 * slowWave),
+            (int) (120 + 60 * sin(0.0015 * t + 0.5 * i)),
+            (int) (150 + 70 * sin(0.0014 * t + 0.55 * i))
+        );
+    }
+}
+
+
+// Mode 8: Изумрудно-зеленая волна
+void emeraldGreen(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double mainWave = 0.5 + 0.5 * sin(0.004 * t + 0.1 * i);
+        leds[i] = CRGB(
+            (int) (30 + 40 * sin(0.003 * t + 0.75 * i)),
+            (int) (180 + 75 * mainWave * sin(0.0035 * t + 0.8 * i)),
+            (int) (100 + 70 * sin(0.0032 * t + 0.85 * i))
+        );
+    }
+}
+
+
+// Mode 9: Буйство — быстрый многоцветный хаос
+void rainbowFrenzy(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(
+            (int) (128 + 127 * sin(0.005 * t + 0.2 * i)),
+            (int) (128 + 127 * sin(0.0048 * t + 0.21 * i + PI / 2)),
+            (int) (128 + 127 * sin(0.0052 * t + 0.22 * i + PI))
+        );
+    }
+}
+
+
+// Mode 10: Нежный лавандовый рассвет
+void lavenderDawn(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double gentle = 0.6 + 0.4 * sin(0.0008 * t + 0.02 * i);
+        leds[i] = CRGB(
+            (int) (160 + 50 * gentle * sin(0.001 * t + 0.4 * i)),
+            (int) (110 + 45 * gentle * sin(0.0011 * t + 0.42 * i)),
+            (int) (180 + 60 * gentle * sin(0.0009 * t + 0.38 * i))
+        );
+    }
+}
+
+
+// Mode 11: Холодный ледяной синий
+void icyBlue(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double shimmer = 0.5 + 0.5 * sin(0.0035 * t + 0.12 * i);
+        leds[i] = CRGB(
+            (int) (50 + 50 * sin(0.002 * t + 0.65 * i)),
+            (int) (120 + 80 * shimmer * sin(0.003 * t + 0.7 * i)),
+            (int) (220 + 35 * sin(0.0032 * t + 0.75 * i))
+        );
+    }
+}
+
+
+// Mode 12: Магический пурпур с золотом
+void magicalMagenta(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double pulse = 0.4 + 0.6 * sin(0.0022 * t + 0.09 * i);
+        leds[i] = CRGB(
+            (int) (180 + 75 * pulse * sin(0.0025 * t + 0.6 * i)),
+            (int) (60 + 50 * sin(0.0023 * t + 0.65 * i)),
+            (int) (200 + 55 * pulse * sin(0.0024 * t + 0.58 * i))
+        );
+    }
+}
+
+
+// Mode 13: Неоновой шок (яркий и быстрый)
+void neonShock(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(
+            (int) (100 + 155 * sin(0.0055 * t + 0.18 * i)),
+            (int) (200 + 55 * sin(0.0058 * t + 0.19 * i + PI / 4)),
+            (int) (150 + 105 * sin(0.0052 * t + 0.17 * i + PI / 2))
+        );
+    }
+}
+
+
+// Mode 14: Спокойный лесной зеленый со мхом
+void forestMoss(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double breathe = 0.55 + 0.45 * sin(0.0012 * t + 0.025 * i);
+        leds[i] = CRGB(
+            (int) (60 + 50 * sin(0.0013 * t + 0.5 * i)),
+            (int) (140 + 80 * breathe * sin(0.0014 * t + 0.52 * i)),
+            (int) (80 + 70 * sin(0.00125 * t + 0.48 * i))
+        );
+    }
+}
+
+
+// Mode 15: Романтичный цветочный (розовый-сиреневый)
+void flowerRomance(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        double wave = 0.5 + 0.5 * sin(0.0018 * t + 0.06 * i);
+        leds[i] = CRGB(
+            (int) (210 + 45 * wave * sin(0.002 * t + 0.55 * i)),
+            (int) (100 + 60 * sin(0.0019 * t + 0.58 * i + PI/3)),
+            (int) (170 + 70 * wave * sin(0.00175 * t + 0.52 * i))
+        );
+    }
+}
+
+
+// ============ ОСНОВНОЙ LOOP ============
+
 void loop() {
     long unsigned t = millis();
     long unsigned dt = t - lastLedShow;
@@ -243,7 +434,32 @@ void loop() {
             sinus2(t);
         } else if (mode == 3) {
             sinus3(t);
+        } else if (mode == 4) {
+            purpleWave(t);
+        } else if (mode == 5) {
+            cyanRush(t);
+        } else if (mode == 6) {
+            sunsetGlow(t);
+        } else if (mode == 7) {
+            softPink(t);
+        } else if (mode == 8) {
+            emeraldGreen(t);
+        } else if (mode == 9) {
+            rainbowFrenzy(t);
+        } else if (mode == 10) {
+            lavenderDawn(t);
+        } else if (mode == 11) {
+            icyBlue(t);
+        } else if (mode == 12) {
+            magicalMagenta(t);
+        } else if (mode == 13) {
+            neonShock(t);
+        } else if (mode == 14) {
+            forestMoss(t);
+        } else if (mode == 15) {
+            flowerRomance(t);
         } else {
+            // Режим с vector-анимацией
             for (int i = 0; i < NUM_LEDS; i++) {
                 GVector vector = vectors[i];
                 if (vectors[i].points[0].timeFn > 0) {
@@ -274,7 +490,6 @@ void loop() {
                           (int) (prev.color.b + (next.color.b - prev.color.b) * k)
                       );
                     }
-
                 }
             }
         }
@@ -282,4 +497,3 @@ void loop() {
         lastLedShow = t;
     }
 }
-
