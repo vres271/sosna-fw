@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <utils.cpp>
-// #include <files.cpp>
 
 #ifdef ESP32
 #include <WiFi.h>
@@ -14,10 +13,6 @@
 #include <FS.h>
 
 AsyncWebServer server(80);
-const char* PARAM_LED = "led";
-const char* PARAM_R = "r";
-const char* PARAM_G = "g";
-const char* PARAM_B = "b";
 
 #define WIFI_SSID "TP-Link_49CB"
 #define WIFI_PASS "sukaher271"
@@ -25,15 +20,13 @@ const char* PARAM_B = "b";
 #include <FastLED.h>
 
 #define NUM_LEDS 200
-#define LED_PIN 5      // пин ленты
-#define LED_TYPE WS2812B // чип ленты
-#define LED_ORDER GRB   // порядок цветов ленты
+#define LED_PIN 5
+#define LED_TYPE WS2812B
+#define LED_ORDER GRB
 
-// Define the array of leds
 CRGB leds[NUM_LEDS];
-byte counter = 0;
+byte mode = 1;
 long unsigned lastLedShow = 0;
-long unsigned lastCounterSwitch = 0;
 
 struct GColor {
   uint8_t r;
@@ -53,206 +46,202 @@ struct GVector {
   long unsigned timeOffset;
 };
 
-struct GPointsTuple {
-  GPoint point;
-  GPoint nextPoint;
-  boolean isLast;
-};
-
 GVector vectors[NUM_LEDS];
-
-byte mode = 1;
 
 void notFound(AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");
-    Serial.println("Not found");
 }
 
 void setup() {
     Serial.begin(115200);
-
+    delay(1000);
+    
     FastLED.addLeds<LED_TYPE, LED_PIN, LED_ORDER>(leds, NUM_LEDS).setCorrection(0xFF80F0);
-
+    FastLED.setBrightness(255);
+    
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
-    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-        Serial.printf("WiFi Failed!\n");
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi Failed!");
         return;
     }
-
+    
     Serial.println();
-    Serial.println("IP Address: ");
+    Serial.print("IP: ");
     Serial.println(WiFi.localIP());
 
-
     if (!SPIFFS.begin()) {
-        Serial.println("Failed to mount file system");
+        Serial.println("SPIFFS Failed!");
         return;
     }
-
 
     server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
-
-
+    // ===== SOSNA =====
+    server.on("/sosna", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "application/json", "{\"result\":{\"device\":\"sosna\",\"leds\":200}}");
+    });
+    
     server.on("/sosna", HTTP_POST, [](AsyncWebServerRequest *request){
-        AsyncWebServerResponse *response = request->beginResponse(
-            200,
-            "application/json", 
-            "{\"result\":{\"device\":\"sosna\",\"leds\":200}}"
-        );
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
-    });    
+        request->send(200, "application/json", "{\"result\":{\"device\":\"sosna\",\"leds\":200}}");
+    });
 
-
+    // ===== GET MODES =====
     server.on("/getmodes", HTTP_POST, [](AsyncWebServerRequest *request){
         String json = "{\"result\": {\"mode\":" + String(mode) + ",\"modes\":[";
-        json += "{\"id\":1,\"name\":\"s1\"},";
-        json += "{\"id\":2,\"name\":\"s2\"},";
-        json += "{\"id\":3,\"name\":\"s3\"},";
-        json += "{\"id\":4,\"name\":\"s4\"},";
-        json += "{\"id\":5,\"name\":\"s5\"},";
-        json += "{\"id\":6,\"name\":\"s6\"},";
-        json += "{\"id\":7,\"name\":\"s7\"},";
-        json += "{\"id\":8,\"name\":\"s8\"},";
-        json += "{\"id\":9,\"name\":\"s9\"},";
-        json += "{\"id\":10,\"name\":\"s10\"},";
-        json += "{\"id\":11,\"name\":\"s11\"},";
-        json += "{\"id\":12,\"name\":\"s12\"},";
-        json += "{\"id\":13,\"name\":\"s13\"},";
-        json += "{\"id\":14,\"name\":\"s14\"},";
-        json += "{\"id\":15,\"name\":\"s15\"}";
+        json += "{\"id\":1,\"name\":\"sinus1\"},{\"id\":2,\"name\":\"sinus2\"},{\"id\":3,\"name\":\"sinus3\"},";
+        json += "{\"id\":4,\"name\":\"purpleWave\"},{\"id\":5,\"name\":\"cyanRush\"},{\"id\":6,\"name\":\"sunsetGlow\"},";
+        json += "{\"id\":7,\"name\":\"softPink\"},{\"id\":8,\"name\":\"emeraldGreen\"},{\"id\":9,\"name\":\"rainbowFrenzy\"},";
+        json += "{\"id\":10,\"name\":\"lavenderDawn\"},{\"id\":11,\"name\":\"icyBlue\"},{\"id\":12,\"name\":\"magicalMagenta\"},";
+        json += "{\"id\":13,\"name\":\"neonShock\"},{\"id\":14,\"name\":\"forestMoss\"},{\"id\":15,\"name\":\"flowerRomance\"}";
         json += "]}}";
+        request->send(200, "application/json", json);
+    });
 
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
-    });    
-
-
+    // ===== SET MODE (НЕБЛОКИРУЮЩИЙ) =====
     server.on("/setmode", HTTP_POST, [](AsyncWebServerRequest *request){
-        AsyncWebParameter* p = request->getParam(0);
-        mode =  p->value().toInt();
-        AsyncWebServerResponse *response = request->beginResponse(
-            200,
-            "application/json", 
-            "{\"result\": " + String(mode) + "}}"
-        );
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
-    });    
+        if (request->hasParam("mode", true)) {
+            mode = request->getParam("mode", true)->value().toInt();
+            request->send(200, "application/json", "{\"result\":" + String(mode) + "}");
+        } else {
+            request->send(400, "application/json", "{\"error\":\"missing mode parameter\"}");
+        }
+    });
 
-
+    // ===== CLEAR =====
     server.on("/clear", HTTP_POST, [](AsyncWebServerRequest *request){
         mode = 0;
         for(int i = 0; i < NUM_LEDS; i++) {
             vectors[i] = (GVector) {(GPoint) {}, 0};
-            leds[i] = CRGB(0, 0, 0);            
+            leds[i] = CRGB(0, 0, 0);
         }
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", "{\"result\":\"ok\"}");
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
+        FastLED.show();
+        request->send(200, "application/json", "{\"result\":\"ok\"}");
     });
 
-
+    // ===== SET (ОПТИМИЗИРОВАННЫЙ) =====
     server.on("/set", HTTP_POST, [](AsyncWebServerRequest *request){
         mode = 0;
-        String message;
-        message = message + "{\"result\":[";
-        AsyncWebParameter* p = request->getParam(0);
-        if (p->isPost()) {
-            String payload = String(p->value().c_str());
-            for(int i = 0; i < NUM_LEDS; i++) {
-                String ledStr = split(payload, ';', i);
-                if (ledStr == "") {
-                    break;
-                }
-                if (i > 0) message = message + ",";
-                int led = split(ledStr, ':', 0).toInt();
-                long unsigned timeOffset = split(ledStr, ':', 1).toInt();
-                
-                String pointsStr = split(ledStr, ':', 2);
-                
-                vectors[led] = (GVector) {{}, timeOffset};
-
-
-                for(int j = 0; j < 16; j++) {
-                    String pointStr = split(pointsStr, '|', j);
-                    if (pointStr == "") {
-                        break;
-                    }
-                    uint8_t r = split(pointStr, ',', 0).toInt();
-                    uint8_t g = split(pointStr, ',', 1).toInt();
-                    uint8_t b = split(pointStr, ',', 2).toInt();
-                    long unsigned t = split(pointStr, ',', 3).toInt();
-                    byte timeFn = split(pointStr, ',', 4).toInt();
-                    byte orderFn = split(pointStr, ',', 4).toInt();
-
-
-                    vectors[led].points[j] = (GPoint) {t, timeFn, orderFn, (GColor) {r, g, b}};
-
-
-                }              
-                message = message + led;
-            }
-        }
-        message = message + "]}";
         
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", message);
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        request->send(response);
+        // Парсинг только необходимого объема данных
+        if (request->hasParam("data", true)) {
+            String payload = request->getParam("data", true)->value();
+            
+            // Ограничение размера payload'а
+            if (payload.length() > 8000) {
+                request->send(400, "application/json", "{\"error\":\"payload too large\"}");
+                return;
+            }
+            
+            int processedLeds = 0;
+            int i = 0;
+            
+            // Неблокирующий парсинг
+            while (i < payload.length() && processedLeds < NUM_LEDS) {
+                int semiPos = payload.indexOf(';', i);
+                if (semiPos == -1) semiPos = payload.length();
+                
+                String ledStr = payload.substring(i, semiPos);
+                
+                if (ledStr.length() > 0) {
+                    int firstColon = ledStr.indexOf(':');
+                    int secondColon = ledStr.indexOf(':', firstColon + 1);
+                    
+                    if (firstColon > 0 && secondColon > firstColon) {
+                        int led = ledStr.substring(0, firstColon).toInt();
+                        long unsigned timeOffset = ledStr.substring(firstColon + 1, secondColon).toInt();
+                        String pointsStr = ledStr.substring(secondColon + 1);
+                        
+                        if (led >= 0 && led < NUM_LEDS) {
+                            vectors[led] = (GVector) {{}, timeOffset};
+                            
+                            int pointIdx = 0;
+                            int pointStart = 0;
+                            
+                            while (pointIdx < 16) {
+                                int pipePos = pointsStr.indexOf('|', pointStart);
+                                if (pipePos == -1) pipePos = pointsStr.length();
+                                
+                                String pointStr = pointsStr.substring(pointStart, pipePos);
+                                
+                                if (pointStr.length() > 0) {
+                                    // Парсинг точки
+                                    int commaPos[5] = {-1, -1, -1, -1, -1};
+                                    int commaIdx = 0;
+                                    
+                                    for (int j = 0; j < pointStr.length() && commaIdx < 5; j++) {
+                                        if (pointStr[j] == ',') {
+                                            commaPos[commaIdx++] = j;
+                                        }
+                                    }
+                                    
+                                    if (commaIdx >= 4) {
+                                        uint8_t r = pointStr.substring(0, commaPos[0]).toInt();
+                                        uint8_t g = pointStr.substring(commaPos[0] + 1, commaPos[1]).toInt();
+                                        uint8_t b = pointStr.substring(commaPos[1] + 1, commaPos[2]).toInt();
+                                        long unsigned t = pointStr.substring(commaPos[2] + 1, commaPos[3]).toInt();
+                                        byte timeFn = pointStr.substring(commaPos[3] + 1).toInt();
+                                        
+                                        vectors[led].points[pointIdx] = (GPoint) {t, timeFn, timeFn, (GColor) {r, g, b}};
+                                        pointIdx++;
+                                    }
+                                } else {
+                                    break;
+                                }
+                                
+                                pointStart = pipePos + 1;
+                            }
+                            
+                            processedLeds++;
+                        }
+                    }
+                }
+                
+                i = semiPos + 1;
+            }
+            
+            request->send(200, "application/json", "{\"result\":{\"processed\":" + String(processedLeds) + "}}");
+        } else {
+            request->send(400, "application/json", "{\"error\":\"missing data parameter\"}");
+        }
     });
 
-
+    // ===== OPTIONS (CORS) =====
     server.on("/set", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
-        AsyncWebServerResponse *response = request->beginResponse(200, "application/json");
-        response->addHeader("Access-Control-Allow-Methods","POST, GET, OPTIONS");
-        response->addHeader("Access-Control-Allow-Headers","X-PINGOTHER, Content-Type");
-        response->addHeader("Access-Control-Allow-Origin","*");
-        response->addHeader("Access-Control-Allow-Private-Network","true");
+        AsyncWebServerResponse *response = request->beginResponse(200);
+        response->addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        response->addHeader("Access-Control-Allow-Origin", "*");
         request->send(response);
-        Serial.println("OPTIONS");
     });
-
+    
+    server.on("/sosna", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse(200);
+        response->addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+    });
+    
+    server.on("/setmode", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse(200);
+        response->addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+    });
 
     server.onNotFound(notFound);
-
-
     server.begin();
-
-
 }
 
-
-// ============ ОРИГИНАЛЬНЫЕ 3 РЕЖИМА ============
-
-void sinus3(long unsigned t) {
-    for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB(
-            (int) (50 + 50 * sin(0.001 * t + 0.000022 * i * t)),
-            (int) (50 + 50 * sin(0.001 * t + 0.000021 * i * t)),
-            (int) (200 + 55 * sin(0.001 * t + 0.00002 * i * t))
-        );
-    }
-}
-
-
-void sinus2(long unsigned t) {
-    for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB(
-            (int) (128 + 128 * sin(0.003 * t + 0.05 * i)),
-            (int) (128 + 128 * sin(0.0033 * t + 0.051 * i)),
-            (int) (128 + 128 * sin(0.0031 * t + 0.052 * i))
-        );
-    }
-}
-
+// ============ РЕЖИМЫ ============
 
 void sinus1(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
@@ -265,10 +254,26 @@ void sinus1(long unsigned t) {
     }
 }
 
+void sinus2(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(
+            (int) (128 + 128 * sin(0.003 * t + 0.05 * i)),
+            (int) (128 + 128 * sin(0.0033 * t + 0.051 * i)),
+            (int) (128 + 128 * sin(0.0031 * t + 0.052 * i))
+        );
+    }
+}
 
-// ============ НОВЫЕ 12 РЕЖИМОВ ============
+void sinus3(long unsigned t) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(
+            (int) (50 + 50 * sin(0.001 * t + 0.000022 * i * t)),
+            (int) (50 + 50 * sin(0.001 * t + 0.000021 * i * t)),
+            (int) (200 + 55 * sin(0.001 * t + 0.00002 * i * t))
+        );
+    }
+}
 
-// Mode 4: Глубокий фиолет с холодной волной
 void purpleWave(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double wave = 0.5 + 0.5 * sin(0.002 * t + 0.08 * i);
@@ -280,8 +285,6 @@ void purpleWave(long unsigned t) {
     }
 }
 
-
-// Mode 5: Бирюза — быстрый циан с зеленоватым оттенком
 void cyanRush(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double phase = 0.006 * t + 0.15 * i;
@@ -293,8 +296,6 @@ void cyanRush(long unsigned t) {
     }
 }
 
-
-// Mode 6: Теплый закат — оранжево-красный переход
 void sunsetGlow(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double breathing = 0.5 + 0.5 * sin(0.0015 * t + 0.03 * i);
@@ -306,8 +307,6 @@ void sunsetGlow(long unsigned t) {
     }
 }
 
-
-// Mode 7: Мягкий розовый сон
 void softPink(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double slowWave = 0.4 + 0.6 * sin(0.001 * t + 0.04 * i);
@@ -319,8 +318,6 @@ void softPink(long unsigned t) {
     }
 }
 
-
-// Mode 8: Изумрудно-зеленая волна
 void emeraldGreen(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double mainWave = 0.5 + 0.5 * sin(0.004 * t + 0.1 * i);
@@ -332,8 +329,6 @@ void emeraldGreen(long unsigned t) {
     }
 }
 
-
-// Mode 9: Буйство — быстрый многоцветный хаос
 void rainbowFrenzy(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         leds[i] = CRGB(
@@ -344,8 +339,6 @@ void rainbowFrenzy(long unsigned t) {
     }
 }
 
-
-// Mode 10: Нежный лавандовый рассвет
 void lavenderDawn(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double gentle = 0.6 + 0.4 * sin(0.0008 * t + 0.02 * i);
@@ -357,8 +350,6 @@ void lavenderDawn(long unsigned t) {
     }
 }
 
-
-// Mode 11: Холодный ледяной синий
 void icyBlue(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double shimmer = 0.5 + 0.5 * sin(0.0035 * t + 0.12 * i);
@@ -370,8 +361,6 @@ void icyBlue(long unsigned t) {
     }
 }
 
-
-// Mode 12: Магический пурпур с золотом
 void magicalMagenta(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double pulse = 0.4 + 0.6 * sin(0.0022 * t + 0.09 * i);
@@ -383,8 +372,6 @@ void magicalMagenta(long unsigned t) {
     }
 }
 
-
-// Mode 13: Неоновой шок (яркий и быстрый)
 void neonShock(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         leds[i] = CRGB(
@@ -395,8 +382,6 @@ void neonShock(long unsigned t) {
     }
 }
 
-
-// Mode 14: Спокойный лесной зеленый со мхом
 void forestMoss(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double breathe = 0.55 + 0.45 * sin(0.0012 * t + 0.025 * i);
@@ -408,8 +393,6 @@ void forestMoss(long unsigned t) {
     }
 }
 
-
-// Mode 15: Романтичный цветочный (розовый-сиреневый)
 void flowerRomance(long unsigned t) {
     for (int i = 0; i < NUM_LEDS; i++) {
         double wave = 0.5 + 0.5 * sin(0.0018 * t + 0.06 * i);
@@ -421,12 +404,12 @@ void flowerRomance(long unsigned t) {
     }
 }
 
-
-// ============ ОСНОВНОЙ LOOP ============
+// ============ LOOP ============
 
 void loop() {
     long unsigned t = millis();
     long unsigned dt = t - lastLedShow;
+    
     if (dt > 10) {
         if (mode == 1) {
             sinus1(t);
@@ -459,7 +442,7 @@ void loop() {
         } else if (mode == 15) {
             flowerRomance(t);
         } else {
-            // Режим с vector-анимацией
+            // Vector animation mode
             for (int i = 0; i < NUM_LEDS; i++) {
                 GVector vector = vectors[i];
                 if (vectors[i].points[0].timeFn > 0) {
@@ -483,17 +466,20 @@ void loop() {
                     }
 
                     if (next.timeFn > 0 && prev.timeFn > 0) {
-                      double k = (next.t != prev.t) ? (((double) (t0 - prev.t)) / ((double) (next.t - prev.t))) : 1;
-                      leds[i] = CRGB(
-                          (int) (prev.color.r + (next.color.r - prev.color.r) * k),
-                          (int) (prev.color.g + (next.color.g - prev.color.g) * k),
-                          (int) (prev.color.b + (next.color.b - prev.color.b) * k)
-                      );
+                        double k = (next.t != prev.t) ? (((double) (t0 - prev.t)) / ((double) (next.t - prev.t))) : 1;
+                        leds[i] = CRGB(
+                            (int) (prev.color.r + (next.color.r - prev.color.r) * k),
+                            (int) (prev.color.g + (next.color.g - prev.color.g) * k),
+                            (int) (prev.color.b + (next.color.b - prev.color.b) * k)
+                        );
                     }
                 }
             }
         }
+        
         FastLED.show();
         lastLedShow = t;
     }
+    
+    yield(); // Даём WiFi и AsyncWebServer обработать запросы
 }
